@@ -47,17 +47,27 @@ activity_labels_file <- file.path(data_dir, "activity_labels.txt")
 feature_labels_file <- file.path(data_dir, "features.txt")
 #folders <- c("test", "train")
 folders <- c("dummy1", "dummy2") #smaller dataset for dev't
-#TODO?: if not exist, download & extract the files?
 
 
 ## MAIN ##
+
+### Step 0: Download source data.
+
+# Test if the data has been unzipped in the working directory...
+if ( !all(file.exists(data_dir, activity_labels_file, feature_labels_file)) ) {
+    # ... if not, download and unzip it
+    url <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
+    zipfile <- "./getdata_projectfiles_UCI HAR Dataset.zip"
+    download.file(url, zipfile, method="curl")
+    unzip(zipfile)
+}
 
 ### Step 1: Merge the training and the test sets to create one data set.
 
 # Load feature labels
 feature_labels <- read.table(feature_labels_file, sep=" ", stringsAsFactors=FALSE)
 feature_labels <- feature_labels[,2] #strip unnecessary first column of row numbers
-feature_lables <- sub("BodyBody","Body", feature_labels) #cleanup "BodyBody" labels
+#feature_labels <- sub("BodyBody","Body", feature_labels) #cleanup "BodyBody" labels
 
 # Load and merge data
 df <- data.frame()
@@ -68,8 +78,8 @@ for (folder in folders) {
 
 ### Step 2: Extract only the measurements on the mean and standard deviation for each measurement.
 
-# Drop columns which don't contain mean(), std(), or meanFreq() values (excepting activity.id & subject.id, of course)
-df <- select(df, subject.id, activity.id, grep("[Mm]ean|std", names(df)))
+# Drop columns which don't contain mean() or std() values (excepting activity.id & subject.id, of course)
+df <- select( df, subject.id, activity.id, grep("(mean|std)\\.{2}", names(df)) )
 
 
 ### Step 3: Use descriptive activity names to name the activities in the data set.
@@ -86,3 +96,34 @@ names(df)[names(df)=="activity.id"] <- "activity" #rename column
 
 ### Step 4: Appropriately label the data set with descriptive variable names.
 
+col_names <- names(df) #get a working copy of the column names
+
+# Cleanup redundant "BodyBody" labels
+col_names <- sub("BodyBody","Body", col_names)
+
+# Expand the initial letters "t" and "f" for clarity
+col_names <- sub("^t", "time", col_names)
+col_names <- sub("^f", "freq", col_names)
+
+# Move "mean" or "std" to the tail end of the word if there's an X/Y/Z axis
+#   e.g. converts "timeBodyAccJerk.mean...X" into "timeBodyAccJerkX.mean"
+col_names <- sub("(\\w+)\\.+(\\w+)\\.+([XYZ])", "\\1\\3.\\2", col_names)
+
+# Convert tailing ".mean"/".std" or ".mean.." to "_mean"
+col_names <- sub("(\\w+)\\.(mean|std)\\.*", "\\1_\\2", col_names)
+
+names(df) <- col_names #apply the name changes
+
+# Move "mean" and "std" into their own column "calculation"
+#TODO: cleanup and comment this section
+df2 <- reshape(df, varying=3:68, sep="_", direction="long")
+names(df2)[names(df2)=="time"] <- "calculation" #rename column
+df2$id <- NULL #drop new "id" column
+row.names(df2) <- NULL #drop unnecessary row names
+attr(df2, "reshapeLong") <- NULL #drop reshape's metadata
+df2$calculation <- as.factor(df2$calculation) #make "calculation" column into factor
+
+
+### Step 5: From the data set in step 4, create a second, independent tidy data set
+###   with the average of each variable for each activity and each subject.
+# TODO
