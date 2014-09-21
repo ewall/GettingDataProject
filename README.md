@@ -35,6 +35,8 @@ Each file contains the same number of lines/rows and are ordered accordingly, so
 
 ![data diagram](https://coursera-forum-screenshots.s3.amazonaws.com/ab/a2776024af11e4a69d5576f8bc8459/Slide2.png)
 
+The raw data in the "Inertial Signals" folders is not imported, since that data was cleaned and incorporated into the input data files mentioned above by the original study preparers.
+
 ### Step 2) Extract only the measurements on the mean and standard deviation for each measurement. 
 
 The source data set, as described in `features_info.txt`, includes quite a few calculations for each measured signal, including the mean, standard deviation, min/max, correlation, etc.

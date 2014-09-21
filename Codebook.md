@@ -21,7 +21,7 @@ The data is provided as a single ASCII text file, `tidy_averages.txt`
 
 The first line contains the column headers. Fields are deliniated by spaces. All text values are in double-quotes.
 
-There are 360 rows of 36 variables.
+There are 360 rows (30 subjects * 6 activities * 2 calculations) of 36 variables.
 
 ### Data structure:
 
@@ -31,7 +31,7 @@ The 36 columns are labeled and comprised as follows. The first 3 columns are par
 - *subject_id*: integers 1 through 30, representing the test subjects
 - *calculation*: text factors "mean" or "std" (standard deviation)
 
-The remaining 33 columns show the **mean value** of measurements on that variable for the group by activity, subject, and calculation:
+The remaining 33 columns show the **mean value** of numeric measurements (16 digits of precision, same as the source data) on that variable for the group by activity, subject, and calculation:
 
 - *timeBodyAcc_X*: time domain signal of body acceleration on x-axis
 - *timeBodyAcc_Y*: time domain signal of body acceleration on y-axis
