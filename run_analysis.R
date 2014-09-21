@@ -2,8 +2,6 @@
 
 ## LIBRARIES ##
 
-#library(data.table)
-library(tidyr)
 library(dplyr)
 
 
@@ -14,10 +12,6 @@ getDataset <- function(data_dir, folder, feature_labels){
     # Load the bulk of the data set
     #   file: X_<folder>.txt = data set
     data_file <- paste(data_dir, "/", folder, "/", "X_", folder, ".txt", sep="")
-    #data <- read.fwf(data_file,
-    #                 widths=c(-1, rep(16, times=length(feature_labels))),
-    #                 col.names=feature_labels,
-    #                 stringsAsFactors=FALSE)
     data <- read.table(data_file, col.names=feature_labels, stringsAsFactors=FALSE)
 
     # Load the subject_id column
@@ -35,7 +29,7 @@ getDataset <- function(data_dir, folder, feature_labels){
     if (length(subject_ids) != length(activity_ids)) stop("input files row counts are not equal")
 
     # Glue together the columns and return the data
-    cbind(data, subject.id=subject_ids, activity.id=activity_ids)
+    cbind(data, subject_id=subject_ids, activity_id=activity_ids)
 }
 
 
@@ -45,8 +39,8 @@ getDataset <- function(data_dir, folder, feature_labels){
 data_dir <- "./UCI HAR Dataset"
 activity_labels_file <- file.path(data_dir, "activity_labels.txt")
 feature_labels_file <- file.path(data_dir, "features.txt")
-#folders <- c("test", "train")
-folders <- c("dummy1", "dummy2") #smaller dataset for dev't
+folders <- c("test", "train")
+output_file <- "tidy_averages.txt"
 
 
 ## MAIN ##
@@ -56,6 +50,7 @@ folders <- c("dummy1", "dummy2") #smaller dataset for dev't
 # Test if the data has been unzipped in the working directory...
 if ( !all(file.exists(data_dir, activity_labels_file, feature_labels_file)) ) {
     # ... if not, download and unzip it
+    print("Downloading input dataset...")
     url <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
     zipfile <- "./getdata_projectfiles_UCI HAR Dataset.zip"
     download.file(url, zipfile, method="curl")
@@ -64,10 +59,11 @@ if ( !all(file.exists(data_dir, activity_labels_file, feature_labels_file)) ) {
 
 ### Step 1: Merge the training and the test sets to create one data set.
 
+print("Loading dataset...")
+
 # Load feature labels
 feature_labels <- read.table(feature_labels_file, sep=" ", stringsAsFactors=FALSE)
 feature_labels <- feature_labels[,2] #strip unnecessary first column of row numbers
-#feature_labels <- sub("BodyBody","Body", feature_labels) #cleanup "BodyBody" labels
 
 # Load and merge data
 df <- data.frame()
@@ -78,8 +74,10 @@ for (folder in folders) {
 
 ### Step 2: Extract only the measurements on the mean and standard deviation for each measurement.
 
-# Drop columns which don't contain mean() or std() values (excepting activity.id & subject.id, of course)
-df <- select( df, subject.id, activity.id, grep("(mean|std)\\.{2}", names(df)) )
+print("Tidying data...")
+
+# Drop columns which don't contain mean() or std() values (excepting activity_id & subject_id, of course)
+df <- select( df, subject_id, activity_id, grep("(mean|std)\\.{2}", names(df)) )
 
 
 ### Step 3: Use descriptive activity names to name the activities in the data set.
@@ -89,9 +87,9 @@ activity_labels <- read.table(activity_labels_file, sep=" ", stringsAsFactors=FA
 activity_labels <- activity_labels[,2] #strip unnecessary first column of row numbers
 activity_labels <- sub("_", " ", tolower(activity_labels)) #prettify
 
-# Convert 'activity.id' column (numbers) to 'activity' (factors)
-df$activity.id <- factor(df$activity.id, labels=activity_labels, ordered=FALSE)
-names(df)[names(df)=="activity.id"] <- "activity" #rename column
+# Convert 'activity_id' column (numbers) to 'activity' (factors)
+df$activity_id <- factor(df$activity_id, labels=activity_labels, ordered=FALSE)
+names(df)[names(df)=="activity_id"] <- "activity" #rename column
 
 
 ### Step 4: Appropriately label the data set with descriptive variable names.
@@ -106,24 +104,45 @@ col_names <- sub("^t", "time", col_names)
 col_names <- sub("^f", "freq", col_names)
 
 # Move "mean" or "std" to the tail end of the word if there's an X/Y/Z axis
-#   e.g. converts "timeBodyAccJerk.mean...X" into "timeBodyAccJerkX.mean"
-col_names <- sub("(\\w+)\\.+(\\w+)\\.+([XYZ])", "\\1\\3.\\2", col_names)
+#   e.g. converts "timeBodyAccJerk.mean...X" into "timeBodyAccJerkX^mean"
+col_names <- sub("(\\w+)\\.+(\\w+)\\.+([XYZ])", "\\1_\\3^\\2", col_names)
 
-# Convert tailing ".mean"/".std" or ".mean.." to "_mean"
-col_names <- sub("(\\w+)\\.(mean|std)\\.*", "\\1_\\2", col_names)
+# Convert tailing ".mean"/".std" or ".mean.." to "^mean"
+col_names <- sub("(\\w+)\\.(mean|std)\\.*", "\\1^\\2", col_names)
 
 names(df) <- col_names #apply the name changes
 
-# Move "mean" and "std" into their own column "calculation"
-#TODO: cleanup and comment this section
-df2 <- reshape(df, varying=3:68, sep="_", direction="long")
-names(df2)[names(df2)=="time"] <- "calculation" #rename column
-df2$id <- NULL #drop new "id" column
-row.names(df2) <- NULL #drop unnecessary row names
-attr(df2, "reshapeLong") <- NULL #drop reshape's metadata
-df2$calculation <- as.factor(df2$calculation) #make "calculation" column into factor
+
+### Step 4b: Move "mean" and "std" into their own column "calculation".
+
+# Split columns between signal e.g. "timeBodyAccX" and calculation "mean"/"std"
+df <- reshape(df, varying=3:68, sep="^", direction="long")
+
+# Fix up new "calculation" column
+names(df)[names(df)=="time"] <- "calculation" #rename "time" column created by reshape()
+df$calculation <- as.factor(df$calculation) #make "calculation" column into factor
+
+# Cleanup junk leftover from reshape
+df$id <- NULL #drop new "id" column
+row.names(df) <- NULL #drop unnecessary row names
+attr(df, "reshapeLong") <- NULL #drop reshape's metadata
+
+# Note: at this point 'df' is a full, tidy dataset suitable for aggregate calcuations
 
 
 ### Step 5: From the data set in step 4, create a second, independent tidy data set
 ###   with the average of each variable for each activity and each subject.
-# TODO
+
+print("Calculating averages...")
+
+df %>% group_by(activity, subject_id, calculation) %>% summarise_each(funs(mean)) -> output
+
+# Using built-in aggregate() function, for comparison:
+#   alt_output <- aggregate(df[,4:36], by=list(activity=df$activity, subject_id=df$subject_id, calculation=df$calculation), FUN=mean)
+# This will give the same results as the dplry functions above, but in a different search order.
+# You can re-arrange and verify as follows:
+#   all ( output == arrange(alt_output, activity, subject_id, calculation) )
+
+# Save tidy aggregate data set
+write.table(output, file=output_file, row.names=FALSE)
+print(paste0("Wrote aggregate output data to '", output_file, "'."))
